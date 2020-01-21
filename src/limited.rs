@@ -1,4 +1,6 @@
-//! Fixed queue implementation
+//! Limited queue implementation
+//!
+
 
 use std::convert::TryInto;
 
@@ -7,7 +9,14 @@ use tokio::sync::Semaphore;
 
 use crate::atomic::Available;
 
-/// Queue that supports
+/// Queue that is limited in size and does not support resizing.
+///
+/// This queue implementation has the following characteristics:
+///
+///   - Based on `crossbeam_queue::ArrayQueue`
+///   - Has limit capacity with back pressure on push
+///   - Does not support resizing
+///   - Enabled via the `limited` feature in your `Cargo.toml`
 pub struct Queue<T> {
     queue: ArrayQueue<T>,
     push_semaphore: Semaphore,

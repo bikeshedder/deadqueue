@@ -1,4 +1,4 @@
-//! Limited queue implementation
+//! Resizable queue implementation
 
 use std::convert::TryInto;
 use std::iter::FromIterator;
@@ -8,7 +8,15 @@ use tokio::sync::{Mutex, Semaphore};
 
 use crate::unlimited::Queue as UnlimitedQueue;
 
-/// Queue that is limited in size and allows resizing.
+/// Queue that is limited in size and supports resizing.
+///
+/// This queue implementation has the following characteristics:
+///
+///   - Resizable (`deadqueue::resizable::Queue`)
+///   - Based on `deadqueue::unlimited::Queue`
+///   - Has limited capacity with back pressure on push
+///   - Supports resizing
+///   - Enabled via the `resizable` feature in your `Cargo.toml`
 pub struct Queue<T> {
     base: UnlimitedQueue<T>,
     capacity: AtomicUsize,

@@ -9,6 +9,12 @@ use tokio::sync::Semaphore;
 use crate::atomic::Available;
 
 /// Queue that is unlimited in size.
+///
+/// This queue implementation has the following characteristics:
+///
+///   - Based on `crossbeam_queue::SegQueue`
+///   - Has unlimitied capacity and no back pressure on push
+///   - Enabled via the `unlimited` feature in your `Cargo.toml`
 pub struct Queue<T> {
     queue: SegQueue<T>,
     semaphore: Semaphore,

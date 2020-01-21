@@ -33,16 +33,15 @@ This crate provides three implementations:
 
 ```rust,ignore
 use std::sync::Arc;
-use std::time::Duration;
-
-use tokio::time::timeout;
 
 const TASK_COUNT: usize = 1000;
 const WORKER_COUNT: usize = 10;
 
+type TaskQueue = deadqueue::limited::Queue<usize>;
+
 #[tokio::main]
 async fn main() {
-    let queue = Arc::new(deadqueue::limited::Queue::<usize>::new(10));
+    let queue = Arc::new(TaskQueue::new(10));
     for i in 0..TASK_COUNT {
         queue.push(i);
     }

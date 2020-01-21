@@ -33,16 +33,15 @@
 //!
 //! ```rust,ignore
 //! use std::sync::Arc;
-//! use std::time::Duration;
-//!
-//! use tokio::time::timeout;
 //!
 //! const TASK_COUNT: usize = 1000;
 //! const WORKER_COUNT: usize = 10;
 //!
+//! type TaskQueue = deadqueue::limited::Queue<usize>;
+//!
 //! #[tokio::main]
 //! async fn main() {
-//!     let queue = Arc::new(deadqueue::limited::Queue::<usize>::new(10));
+//!     let queue = Arc::new(TaskQueue::new(10));
 //!     for i in 0..TASK_COUNT {
 //!         queue.push(i);
 //!     }
@@ -73,9 +72,11 @@
 
 mod atomic;
 
-#[cfg(feature = "limited")]
-pub mod limited;
-#[cfg(feature = "resizable")]
-pub mod resizable;
 #[cfg(feature = "unlimited")]
 pub mod unlimited;
+
+#[cfg(feature = "resizable")]
+pub mod resizable;
+
+#[cfg(feature = "limited")]
+pub mod limited;
