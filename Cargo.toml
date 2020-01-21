@@ -1,0 +1,26 @@
+[package]
+name = "deadqueue"
+version = "0.1.0"
+authors = ["Michael P. Jung <michael.jung@terreon.de>"]
+description = "Dead simple async queue"
+keywords = ["async", "queue"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/bikeshedder/deadqueue"
+readme = "README.md"
+edition = "2018"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+tokio = { version = "0.2.9", features = ["sync"] }
+crossbeam-queue = "0.2.1"
+
+[dev-dependencies]
+tokio = { version = "0.2.9", features = ["sync", "macros", "rt-core"] }
+
+[features]
+default = ["unlimited", "resizable", "limited"]
+unlimited = []
+resizable = ["unlimited"]
+limited = []
