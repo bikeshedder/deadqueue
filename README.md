@@ -70,7 +70,7 @@ Deadqueue is by no means the only queue implementation available. It does things
 
 - **Fair scheduling.** Tasks calling `pop` will receive items in a first-come-first-serve fashion. This is mainly due to the use of `tokio::sync::Semaphore` which is fair by nature.
 
-- **On struct, not two.** The channels of `tokio`, `async_std` and `futures-intrusive` split the queue in two structs (`Sender` and `Receiver`) which makes the usage sligthly more complicated.
+- **One struct, not two.** The channels of `tokio`, `async_std` and `futures-intrusive` split the queue in two structs (`Sender` and `Receiver`) which makes the usage sligthly more complicated.
 
 - **Bring your own `Arc`.** Since there is no separation between `Sender` and `Receiver` there is also no need for an internal `Arc`. (All implementations that split the channel into a `Sender` and `Receiver` need some kind of `Arc` internally.)
 
