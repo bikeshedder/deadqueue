@@ -13,11 +13,11 @@ edition = "2018"
 all-features = true
 
 [dependencies]
-tokio = { version = "0.2.9", features = ["sync"] }
-crossbeam-queue = "0.2.1"
+tokio = { version = "1", features = ["sync"] }
+crossbeam-queue = "0.3"
 
 [dev-dependencies]
-tokio = { version = "0.2.9", features = ["sync", "macros", "rt-core"] }
+tokio = { version = "1", features = ["sync", "macros", "rt-multi-thread"] }
 
 [features]
 default = ["unlimited", "resizable", "limited"]

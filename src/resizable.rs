@@ -52,7 +52,7 @@ impl<T> Queue<T> {
     }
     /// Push an item into the queue
     pub async fn push(&self, item: T) {
-        let permit = self.push_semaphore.acquire().await;
+        let permit = self.push_semaphore.acquire().await.unwrap();
         self.base.push(item);
         permit.forget();
     }
@@ -97,7 +97,7 @@ impl<T> Queue<T> {
             self.push_semaphore.add_permits(diff);
         } else if new_max_size < self.capacity() {
             for _ in self.capacity()..new_max_size {
-                let permit = self.push_semaphore.acquire().await;
+                let permit = self.push_semaphore.acquire().await.unwrap();
                 self.capacity.fetch_sub(1, Ordering::Relaxed);
                 permit.forget();
                 self.base.pop().await;

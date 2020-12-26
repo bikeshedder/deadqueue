@@ -38,7 +38,7 @@ impl<T> Queue<T> {
     /// this method blocks until an item is available.
     pub async fn pop(&self) -> T {
         let txn = self.available.sub();
-        let permit = self.pop_semaphore.acquire().await;
+        let permit = self.pop_semaphore.acquire().await.unwrap();
         let item = self.queue.pop().unwrap();
         txn.commit();
         permit.forget();
@@ -58,9 +58,9 @@ impl<T> Queue<T> {
     }
     /// Push an item into the queue
     pub async fn push(&self, item: T) {
-        let permit = self.push_semaphore.acquire().await;
+        let permit = self.push_semaphore.acquire().await.unwrap();
         self.available.add();
-        self.queue.push(item).unwrap();
+        self.queue.push(item).ok().unwrap();
         permit.forget();
         self.pop_semaphore.add_permits(1);
     }
@@ -69,7 +69,7 @@ impl<T> Queue<T> {
     pub fn try_push(&self, item: T) -> Result<(), T> {
         match self.push_semaphore.try_acquire() {
             Ok(permit) => {
-                self.queue.push(item).unwrap();
+                self.queue.push(item).ok().unwrap();
                 permit.forget();
                 self.pop_semaphore.add_permits(1);
                 Ok(())
@@ -104,7 +104,7 @@ where
         let size = iter.len();
         let queue = ArrayQueue::new(size);
         for obj in iter {
-            queue.push(obj).unwrap();
+            queue.push(obj).ok().unwrap();
         }
         Queue {
             queue: ArrayQueue::new(size),

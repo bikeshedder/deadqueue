@@ -30,7 +30,7 @@ impl<T> Queue<T> {
     /// this method blocks until an item is available.
     pub async fn pop(&self) -> T {
         let txn = self.available.sub();
-        let permit = self.semaphore.acquire().await;
+        let permit = self.semaphore.acquire().await.unwrap();
         txn.commit();
         //txn.commit();
         // FIXME must be used
