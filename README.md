@@ -31,8 +31,9 @@ This crate provides three implementations:
 
 ## Example
 
-```rust,ignore
+```rust
 use std::sync::Arc;
+use tokio::time::{sleep, Duration};
 
 const TASK_COUNT: usize = 1000;
 const WORKER_COUNT: usize = 10;
@@ -41,22 +42,24 @@ type TaskQueue = deadqueue::limited::Queue<usize>;
 
 #[tokio::main]
 async fn main() {
-    let queue = Arc::new(TaskQueue::new(10));
+    let queue = Arc::new(TaskQueue::new(TASK_COUNT));
     for i in 0..TASK_COUNT {
-        queue.push(i);
+        queue.try_push(i).unwrap();
     }
-    let mut futures = Vec::new();
-    for _ in 0..WORKER_COUNT {
+    for worker in 0..WORKER_COUNT {
         let queue = queue.clone();
-        futures.push(tokio::spawn(async move {
-            let task = queue.pop().await;
-            assert!(task > 1);
-        }));
+        tokio::spawn(async move {
+            loop {
+                let task = queue.pop().await;
+                println!("worker[{}] processing task[{}] ...", worker, task);
+            }
+        });
     }
-    for future in futures {
-        future.await;
+    while queue.len() > 0 {
+        println!("Waiting for workers to finish...");
+        sleep(Duration::from_millis(100)).await;
     }
-    assert_eq!(queue.len(), 0);
+    println!("All tasks done. :-)");
 }
 ```
 

@@ -31,8 +31,9 @@
 //!
 //! ## Example
 //!
-//! ```rust,ignore
+//! ```rust
 //! use std::sync::Arc;
+//! use tokio::time::{sleep, Duration};
 //!
 //! const TASK_COUNT: usize = 1000;
 //! const WORKER_COUNT: usize = 10;
@@ -41,24 +42,52 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let queue = Arc::new(TaskQueue::new(10));
+//!     let queue = Arc::new(TaskQueue::new(TASK_COUNT));
 //!     for i in 0..TASK_COUNT {
-//!         queue.push(i);
+//!         queue.try_push(i).unwrap();
 //!     }
-//!     let mut futures = Vec::new();
-//!     for _ in 0..WORKER_COUNT {
+//!     for worker in 0..WORKER_COUNT {
 //!         let queue = queue.clone();
-//!         futures.push(tokio::spawn(async move {
-//!             let task = queue.pop().await;
-//!             assert!(task > 1);
-//!         }));
+//!         tokio::spawn(async move {
+//!             loop {
+//!                 let task = queue.pop().await;
+//!                 println!("worker[{}] processing task[{}] ...", worker, task);
+//!             }
+//!         });
 //!     }
-//!     for future in futures {
-//!         future.await;
+//!     while queue.len() > 0 {
+//!         println!("Waiting for workers to finish...");
+//!         sleep(Duration::from_millis(100)).await;
 //!     }
-//!     assert_eq!(queue.len(), 0);
+//!     println!("All tasks done. :-)");
 //! }
 //! ```
+//!
+//! ## Reasons for yet another queue
+//!
+//! Deadqueue is by no means the only queue implementation available. It does things a little different and provides features that other implementations are lacking:
+//!
+//! - **Resizable queue.** Usually you have to pick between `limited` and `unlimited` queues. This crate features a `resizable` Queue which can be resized as needed. This is probably a big **unique selling point** of this crate.
+//!
+//! - **Introspection support.** The methods `.len()`, `.capacity()` and `.available()` provide access the current state of the queue.
+//!
+//! - **Fair scheduling.** Tasks calling `pop` will receive items in a first-come-first-serve fashion. This is mainly due to the use of `tokio::sync::Semaphore` which is fair by nature.
+//!
+//! - **One struct, not two.** The channels of `tokio`, `async_std` and `futures-intrusive` split the queue in two structs (`Sender` and `Receiver`) which makes the usage sligthly more complicated.
+//!
+//! - **Bring your own `Arc`.** Since there is no separation between `Sender` and `Receiver` there is also no need for an internal `Arc`. (All implementations that split the channel into a `Sender` and `Receiver` need some kind of `Arc` internally.)
+//!
+//! - **Fully concurrent access.** No need to wrap the `Receiver` part in a `Mutex`. All methods support concurrent accesswithout the need for an additional synchronization primitive.
+//!
+//! - **Support for `try__` methods.** The methods `try_push` and `try_pop` can be used to access the queue from non-blocking synchroneous code.
+//!
+//! ## Alternatives
+//!
+//! | Crate | Limitations | Documentation |
+//! | --- | --- | --- |
+//! | [`tokio`](https://crates.io/crates/tokio) | No resizable queue. No introspection support. Synchronization of `Receiver` needed. | [`tokio::sync::mpsc::channel`](https://docs.rs/tokio/latest/tokio/sync/mpsc/fn.channel.html), [`tokio::sync::mpsc::unbounded_channel`](https://docs.rs/tokio/latest/tokio/sync/mpsc/fn.unbounded_channel.html) |
+//! | [`async-std`](https://crates.io/crates/async-std) | No resizable or unlimited queue. No introspection support. No `try_send` or `try_recv` methods. | [`async_std::sync::channel`](https://docs.rs/async-std/latest/async_std/sync/fn.channel.html) |
+//! | [`futures`](https://crates.io/crates/futures) | No resizable queue. No introspection support. | [`futures::channel::mpsc::channel`](https://docs.rs/futures/0.3.1/futures/channel/mpsc/fn.channel.html), [`futures::channel::mpsc::unbounded`](https://docs.rs/futures/0.3.1/futures/channel/mpsc/fn.unbounded.html) |
 //!
 //! ## License
 //!
