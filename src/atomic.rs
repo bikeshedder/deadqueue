@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicIsize, Ordering};
 
+#[derive(Debug)]
 pub struct Available(AtomicIsize);
 
 impl Available {

@@ -17,6 +17,7 @@ use crate::atomic::Available;
 ///   - Has limit capacity with back pressure on push
 ///   - Does not support resizing
 ///   - Enabled via the `limited` feature in your `Cargo.toml`
+#[derive(Debug)]
 pub struct Queue<T> {
     queue: ArrayQueue<T>,
     push_semaphore: Semaphore,
