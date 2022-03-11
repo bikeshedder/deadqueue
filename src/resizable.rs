@@ -5,9 +5,12 @@ use std::fmt::Debug;
 use std::iter::FromIterator;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::{Mutex, Semaphore, watch};
 
 use crate::unlimited::Queue as UnlimitedQueue;
+
+/// Private type alias for notify_full
+type FullNotifier = watch::Sender<()>;
 
 /// Queue that is limited in size and supports resizing.
 ///
@@ -23,6 +26,7 @@ pub struct Queue<T> {
     capacity: AtomicUsize,
     push_semaphore: Semaphore,
     resize_mutex: Mutex<()>,
+    notify_full: FullNotifier,
 }
 
 impl<T> Queue<T> {
@@ -33,6 +37,7 @@ impl<T> Queue<T> {
             capacity: AtomicUsize::new(max_size),
             push_semaphore: Semaphore::new(max_size),
             resize_mutex: Mutex::default(),
+            notify_full: Self::new_notify_full(),
         }
     }
     /// Get an item from the queue. If the queue is currently empty
@@ -56,6 +61,7 @@ impl<T> Queue<T> {
         let permit = self.push_semaphore.acquire().await.unwrap();
         self.queue.push(item);
         permit.forget();
+        self.notify_if_full();
     }
     /// Try to push an item to the queue. If the queue is currently
     /// full return the object as `Err<T>`.
@@ -64,6 +70,7 @@ impl<T> Queue<T> {
             Ok(permit) => {
                 self.queue.push(item);
                 permit.forget();
+                self.notify_if_full();
                 Ok(())
             }
             Err(_) => Err(item),
@@ -94,6 +101,38 @@ impl<T> Queue<T> {
     /// number of futures waiting for an item.
     pub fn available(&self) -> isize {
         self.queue.available()
+    }
+    /// Initialize the notify_full sender
+    fn new_notify_full() -> FullNotifier {
+        let (sender, _) = watch::channel(());
+        sender
+    }
+    /// Check if the queue is full and notify any waiters
+    fn notify_if_full(&self) {
+        if self.push_semaphore.available_permits() == 0 {
+            self.notify_full.send_replace(());
+        }
+    }
+    /// Await until the queue is full.
+    pub async fn full(&self) {
+        if self.len() == self.capacity() {
+            return;
+        }
+        self.notify_full.subscribe().changed().await.unwrap();
+    }
+    /// Await until the queue is empty.
+    pub async fn empty(&self) {
+        loop {
+            let capacity = self.capacity().try_into().unwrap();
+            let _permit = self.push_semaphore.acquire_many(capacity).await.unwrap();
+            // Check that queue is empty in case it has been resized
+            // larger such that acquire_many succeeded even with items
+            // still in the queue
+            if self.is_empty() {
+                break;
+            }
+            // _permit dropped at end of loop
+        }
     }
     /// Resize queue. This increases or decreases the queue
     /// capacity accordingly.
@@ -133,6 +172,15 @@ impl<T> Queue<T> {
                     };
                     self.capacity.fetch_sub(1, Ordering::Relaxed);
                 }
+                // Currently this is a no-op because this resize() function
+                // borrows mutably, so there can be no callers awaiting
+                // `self.full()`, because they would hold an immutable reference.
+                //
+                // The code in self.resize() doesn't require mutability, though.
+                // If the API changes in a future version, this call should remain
+                // here so any callers awaiting `self.full()` will be notified
+                // if the queue is resized smaller such that it becomes full.
+                self.notify_if_full();
             }
             _ => {}
         }
@@ -159,6 +207,7 @@ impl<T> FromIterator<T> for Queue<T> {
             capacity: len.try_into().unwrap(),
             push_semaphore: Semaphore::new(0),
             resize_mutex: Mutex::default(),
+            notify_full: Self::new_notify_full(),
         }
     }
 }
