@@ -109,6 +109,16 @@ impl<T> Queue<T> {
     pub fn available(&self) -> isize {
         self.available.get()
     }
+    /// Await until the queue is full.
+    pub async fn full(&self) {
+        let capacity = self.capacity().try_into().unwrap();
+        let _ = self.pop_semaphore.acquire_many(capacity).await.unwrap();
+    }
+    /// Await until the queue is empty.
+    pub async fn empty(&self) {
+        let capacity = self.capacity().try_into().unwrap();
+        let _ = self.push_semaphore.acquire_many(capacity).await.unwrap();
+    }
 }
 
 impl<T, I> From<I> for Queue<T>

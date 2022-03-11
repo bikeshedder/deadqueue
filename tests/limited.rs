@@ -42,6 +42,37 @@ mod tests {
         assert_eq!(queue.len(), 0);
     }
 
+    #[tokio::test]
+    async fn test_full() {
+        let queue: Arc<Queue<usize>> = Arc::new(Queue::new(100));
+        let future_queue = queue.clone();
+        let future = tokio::spawn(async move {
+            future_queue.full().await;
+        });
+        for i in 0..100 {
+            queue.push(i).await;
+        }
+        future.await.unwrap();
+        assert_eq!(queue.len(), 100);
+    }
+
+    #[tokio::test]
+    async fn test_empty() {
+        let queue: Arc<Queue<usize>> = Arc::new(Queue::new(100));
+        for i in 0..100 {
+            queue.push(i).await;
+        }
+        let future_queue = queue.clone();
+        let future = tokio::spawn(async move {
+            future_queue.empty().await;
+        });
+        for _ in 0..100 {
+            queue.pop().await;
+        }
+        future.await.unwrap();
+        assert_eq!(queue.len(), 0);
+    }
+
     #[test]
     fn test_debug() {
         struct NoDebug {}
