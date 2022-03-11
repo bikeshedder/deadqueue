@@ -19,7 +19,7 @@ use crate::unlimited::Queue as UnlimitedQueue;
 ///   - Enabled via the `resizable` feature in your `Cargo.toml`
 #[derive(Debug)]
 pub struct Queue<T> {
-    base: UnlimitedQueue<T>,
+    queue: UnlimitedQueue<T>,
     capacity: AtomicUsize,
     push_semaphore: Semaphore,
     resize_mutex: Mutex<()>,
@@ -29,7 +29,7 @@ impl<T> Queue<T> {
     /// Create new empty queue
     pub fn new(max_size: usize) -> Self {
         Self {
-            base: UnlimitedQueue::new(),
+            queue: UnlimitedQueue::new(),
             capacity: AtomicUsize::new(max_size),
             push_semaphore: Semaphore::new(max_size),
             resize_mutex: Mutex::default(),
@@ -38,14 +38,14 @@ impl<T> Queue<T> {
     /// Get an item from the queue. If the queue is currently empty
     /// this method blocks until an item is available.
     pub async fn pop(&self) -> T {
-        let item = self.base.pop().await;
+        let item = self.queue.pop().await;
         self.push_semaphore.add_permits(1);
         item
     }
     /// Try to get an item from the queue. If the queue is currently
     /// empty return None instead.
     pub fn try_pop(&self) -> Option<T> {
-        let item = self.base.try_pop();
+        let item = self.queue.try_pop();
         if item.is_some() {
             self.push_semaphore.add_permits(1);
         }
@@ -54,7 +54,7 @@ impl<T> Queue<T> {
     /// Push an item into the queue
     pub async fn push(&self, item: T) {
         let permit = self.push_semaphore.acquire().await.unwrap();
-        self.base.push(item);
+        self.queue.push(item);
         permit.forget();
     }
     /// Try to push an item to the queue. If the queue is currently
@@ -62,7 +62,7 @@ impl<T> Queue<T> {
     pub fn try_push(&self, item: T) -> Result<(), T> {
         match self.push_semaphore.try_acquire() {
             Ok(permit) => {
-                self.base.push(item);
+                self.queue.push(item);
                 permit.forget();
                 Ok(())
             }
@@ -75,13 +75,13 @@ impl<T> Queue<T> {
     }
     /// Get current length of queue
     pub fn len(&self) -> usize {
-        self.base.len()
+        self.queue.len()
     }
     /// The number of available items in the queue. If there are no
     /// items in the queue this number can become negative and stores the
     /// number of futures waiting for an item.
     pub fn available(&self) -> isize {
-        self.base.available()
+        self.queue.available()
     }
     /// Resize queue. This increases or decreases the queue
     /// capacity accordingly.
@@ -101,7 +101,7 @@ impl<T> Queue<T> {
                 let permit = self.push_semaphore.acquire().await.unwrap();
                 self.capacity.fetch_sub(1, Ordering::Relaxed);
                 permit.forget();
-                self.base.pop().await;
+                self.queue.pop().await;
             }
         }
     }
@@ -109,10 +109,10 @@ impl<T> Queue<T> {
 
 impl<T> FromIterator<T> for Queue<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let base = UnlimitedQueue::from_iter(iter);
-        let len = base.len();
+        let queue = UnlimitedQueue::from_iter(iter);
+        let len = queue.len();
         Self {
-            base,
+            queue,
             capacity: len.try_into().unwrap(),
             push_semaphore: Semaphore::new(0),
             resize_mutex: Mutex::default(),
