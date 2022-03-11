@@ -96,17 +96,21 @@ impl<T> Queue<T> {
     /// push items to the queue.
     pub async fn resize(&mut self, new_max_size: usize) {
         let _guard = self.resize_mutex.lock().await;
-        if new_max_size > self.capacity() {
-            let diff = new_max_size - self.capacity();
-            self.capacity.fetch_add(diff, Ordering::Relaxed);
-            self.push_semaphore.add_permits(diff);
-        } else if new_max_size < self.capacity() {
-            for _ in self.capacity()..new_max_size {
-                let permit = self.push_semaphore.acquire().await.unwrap();
-                self.capacity.fetch_sub(1, Ordering::Relaxed);
-                permit.forget();
-                self.queue.pop().await;
+        match new_max_size.cmp(&self.capacity()) {
+            std::cmp::Ordering::Greater => {
+                let diff = new_max_size - self.capacity();
+                self.capacity.fetch_add(diff, Ordering::Relaxed);
+                self.push_semaphore.add_permits(diff);
             }
+            std::cmp::Ordering::Less => {
+                for _ in self.capacity()..new_max_size {
+                    let permit = self.push_semaphore.acquire().await.unwrap();
+                    self.capacity.fetch_sub(1, Ordering::Relaxed);
+                    permit.forget();
+                    self.queue.pop().await;
+                }
+            }
+            _ => {}
         }
     }
 }
