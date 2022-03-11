@@ -1,6 +1,7 @@
 //! Resizable queue implementation
 
 use std::convert::TryInto;
+use std::fmt::Debug;
 use std::iter::FromIterator;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -17,7 +18,6 @@ use crate::unlimited::Queue as UnlimitedQueue;
 ///   - Has limited capacity with back pressure on push
 ///   - Supports resizing
 ///   - Enabled via the `resizable` feature in your `Cargo.toml`
-#[derive(Debug)]
 pub struct Queue<T> {
     queue: UnlimitedQueue<T>,
     capacity: AtomicUsize,
@@ -104,6 +104,17 @@ impl<T> Queue<T> {
                 self.queue.pop().await;
             }
         }
+    }
+}
+
+impl<T> Debug for Queue<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Queue")
+            .field("queue", &self.queue)
+            .field("capacity", &self.capacity)
+            .field("push_semaphore", &self.push_semaphore)
+            .field("resize_mutex", &self.resize_mutex)
+            .finish()
     }
 }
 

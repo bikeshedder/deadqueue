@@ -1,8 +1,7 @@
 //! Limited queue implementation
 //!
 
-
-use std::convert::TryInto;
+use std::{convert::TryInto, fmt::Debug};
 
 use crossbeam_queue::ArrayQueue;
 use tokio::sync::Semaphore;
@@ -17,12 +16,22 @@ use crate::atomic::Available;
 ///   - Has limit capacity with back pressure on push
 ///   - Does not support resizing
 ///   - Enabled via the `limited` feature in your `Cargo.toml`
-#[derive(Debug)]
 pub struct Queue<T> {
     queue: ArrayQueue<T>,
     push_semaphore: Semaphore,
     pop_semaphore: Semaphore,
     available: Available,
+}
+
+impl<T> Debug for Queue<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Queue")
+            .field("queue", &self.queue)
+            .field("push_semaphore", &self.push_semaphore)
+            .field("pop_semaphore", &self.pop_semaphore)
+            .field("available", &self.available)
+            .finish()
+    }
 }
 
 impl<T> Queue<T> {

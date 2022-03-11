@@ -49,4 +49,11 @@ mod tests {
         assert_eq!(queue.len(), 0);
         assert_eq!(queue.available(), 0);
     }
+
+    #[test]
+    fn test_debug() {
+        struct NoDebug {}
+        let queue: Queue<NoDebug> = Queue::new();
+        format!("{:?}", queue);
+    }
 }

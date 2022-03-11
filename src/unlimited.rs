@@ -1,6 +1,7 @@
 //! Unlimited queue implementation
 
 use std::convert::TryInto;
+use std::fmt::Debug;
 use std::iter::FromIterator;
 
 use crossbeam_queue::SegQueue;
@@ -15,7 +16,6 @@ use crate::atomic::Available;
 ///   - Based on `crossbeam_queue::SegQueue`
 ///   - Has unlimitied capacity and no back pressure on push
 ///   - Enabled via the `unlimited` feature in your `Cargo.toml`
-#[derive(Debug)]
 pub struct Queue<T> {
     queue: SegQueue<T>,
     semaphore: Semaphore,
@@ -64,6 +64,16 @@ impl<T> Queue<T> {
     /// queue.
     pub fn available(&self) -> isize {
         self.available.get()
+    }
+}
+
+impl<T> Debug for Queue<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Queue")
+            .field("queue", &self.queue)
+            .field("semaphore", &self.semaphore)
+            .field("available", &self.available)
+            .finish()
     }
 }
 
