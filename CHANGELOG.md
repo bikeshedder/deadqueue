@@ -3,6 +3,7 @@
 ## v0.2.1 (unreleased)
 
 * Implement `Debug` for all queues
+* Add `Queue::is_empty` method
 
 ## v0.2.0
 

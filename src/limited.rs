@@ -95,6 +95,10 @@ impl<T> Queue<T> {
     pub fn len(&self) -> usize {
         self.queue.len()
     }
+    /// Returns `true` if the queue is empty.
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
+    }
     /// The number of available items in the queue. If there are no
     /// items in the queue this number can become negative and stores the
     /// number of futures waiting for an item.

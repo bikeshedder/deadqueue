@@ -59,6 +59,10 @@ impl<T> Queue<T> {
     pub fn len(&self) -> usize {
         self.queue.len()
     }
+    /// Returns `true` if the queue is empty.
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
+    }
     /// Get available count. This is the difference between the current
     /// queue length and the number of tasks waiting for an item of the
     /// queue.
