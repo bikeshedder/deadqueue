@@ -15,6 +15,7 @@ use crate::atomic::Available;
 ///   - Based on `crossbeam_queue::SegQueue`
 ///   - Has unlimitied capacity and no back pressure on push
 ///   - Enabled via the `unlimited` feature in your `Cargo.toml`
+#[derive(Debug)]
 pub struct Queue<T> {
     queue: SegQueue<T>,
     semaphore: Semaphore,

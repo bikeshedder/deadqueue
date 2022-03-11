@@ -17,6 +17,7 @@ use crate::unlimited::Queue as UnlimitedQueue;
 ///   - Has limited capacity with back pressure on push
 ///   - Supports resizing
 ///   - Enabled via the `resizable` feature in your `Cargo.toml`
+#[derive(Debug)]
 pub struct Queue<T> {
     base: UnlimitedQueue<T>,
     capacity: AtomicUsize,
