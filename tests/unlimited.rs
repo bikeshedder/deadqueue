@@ -50,6 +50,31 @@ mod tests {
         assert_eq!(queue.available(), 0);
     }
 
+    #[tokio::test]
+    async fn test_empty() {
+        let queue: Arc<Queue<usize>> = Arc::new(Queue::new());
+        for i in 0..100 {
+            queue.push(i);
+        }
+        let barrier = Arc::new(tokio::sync::Barrier::new(2));
+        let future_queue = queue.clone();
+        let future_barrier = barrier.clone();
+        let future = tokio::spawn(async move {
+            future_barrier.wait().await;
+            assert!(!future_queue.is_empty());
+            future_queue.empty().await;
+        });
+        // Slightly delay the pop operations
+        // to ensure that the spawned task has
+        // time to start
+        barrier.wait().await;
+        for _ in 0..100 {
+            queue.pop().await;
+        }
+        future.await.unwrap();
+        assert_eq!(queue.len(), 0);
+    }
+
     #[test]
     fn test_debug() {
         struct NoDebug {}

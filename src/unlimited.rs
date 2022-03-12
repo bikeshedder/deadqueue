@@ -5,9 +5,11 @@ use std::fmt::Debug;
 use std::iter::FromIterator;
 
 use crossbeam_queue::SegQueue;
-use tokio::sync::Semaphore;
+use tokio::sync::{Semaphore, watch};
 
 use crate::atomic::Available;
+
+type EmptyNotifier = watch::Sender<()>;
 
 /// Queue that is unlimited in size.
 ///
@@ -20,6 +22,7 @@ pub struct Queue<T> {
     queue: SegQueue<T>,
     semaphore: Semaphore,
     available: Available,
+    notify_empty: EmptyNotifier,
 }
 
 impl<T> Queue<T> {
@@ -27,6 +30,14 @@ impl<T> Queue<T> {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Notify any callers awaiting empty()
+    fn notify_if_empty(&self) {
+        if self.is_empty() {
+            self.notify_empty.send_replace(());
+        }
+    }
+
     /// Get an item from the queue. If the queue is currently empty
     /// this method blocks until an item is available.
     pub async fn pop(&self) -> T {
@@ -37,6 +48,7 @@ impl<T> Queue<T> {
         // FIXME must be used
         let item = self.queue.pop().unwrap();
         permit.forget();
+        self.notify_if_empty();
         item
     }
     /// Try to get an item from the queue. If the queue is currently
@@ -47,6 +59,7 @@ impl<T> Queue<T> {
         let item = self.queue.pop().unwrap();
         txn.commit();
         permit.forget();
+        self.notify_if_empty();
         Some(item)
     }
     /// Push an item into the queue
@@ -69,6 +82,13 @@ impl<T> Queue<T> {
     pub fn available(&self) -> isize {
         self.available.get()
     }
+    /// Await until the queue is empty
+    pub async fn empty(&self) {
+        if self.is_empty() {
+            return;
+        }
+        self.notify_empty.subscribe().changed().await.unwrap()
+    }
 }
 
 impl<T> Debug for Queue<T> {
@@ -77,16 +97,19 @@ impl<T> Debug for Queue<T> {
             .field("queue", &self.queue)
             .field("semaphore", &self.semaphore)
             .field("available", &self.available)
+            .field("empty", &self.notify_empty)
             .finish()
     }
 }
 
 impl<T> Default for Queue<T> {
     fn default() -> Self {
+        let (sender, _) = watch::channel(());
         Self {
             queue: SegQueue::new(),
             semaphore: Semaphore::new(0),
             available: Available::new(0),
+            notify_empty: sender,
         }
     }
 }
@@ -102,6 +125,7 @@ impl<T> FromIterator<T> for Queue<T> {
             queue,
             semaphore: Semaphore::new(size),
             available: Available::new(size.try_into().unwrap()),
+            ..Self::default()
         }
     }
 }
