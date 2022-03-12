@@ -50,10 +50,15 @@ mod tests {
     #[tokio::test]
     async fn test_full() {
         let queue: Arc<Queue<usize>> = Arc::new(Queue::new(100));
+        let barrier = Arc::new(tokio::sync::Barrier::new(2));
         let future_queue = queue.clone();
+        let future_barrier = barrier.clone();
         let future = tokio::spawn(async move {
+            future_barrier.wait().await;
+            assert_ne!(future_queue.capacity(), future_queue.len());
             future_queue.full().await;
         });
+        barrier.wait().await;
         for i in 0..100 {
             queue.push(i).await;
         }
@@ -67,10 +72,15 @@ mod tests {
         for i in 0..100 {
             queue.push(i).await;
         }
+        let barrier = Arc::new(tokio::sync::Barrier::new(2));
         let future_queue = queue.clone();
+        let future_barrier = barrier.clone();
         let future = tokio::spawn(async move {
+            future_barrier.wait().await;
+            assert!(!future_queue.is_empty());
             future_queue.empty().await;
         });
+        barrier.wait().await;
         for _ in 0..100 {
             queue.pop().await;
         }
