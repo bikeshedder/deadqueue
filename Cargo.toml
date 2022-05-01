@@ -1,6 +1,6 @@
 [package]
 name = "deadqueue"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Michael P. Jung <michael.jung@terreon.de>"]
 description = "Dead simple async queue"
 keywords = ["async", "queue"]
