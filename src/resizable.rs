@@ -94,20 +94,36 @@ impl<T> Queue<T> {
     /// blocking unless a resize operation is already in progress.
     /// Decreasing the capacity can block if there are futures waiting to
     /// push items to the queue.
-    pub async fn resize(&mut self, new_max_size: usize) {
+    pub async fn resize(&self, target_capacity: usize) {
         let _guard = self.resize_mutex.lock().await;
-        match new_max_size.cmp(&self.capacity()) {
+        match target_capacity.cmp(&self.capacity()) {
             std::cmp::Ordering::Greater => {
-                let diff = new_max_size - self.capacity();
+                let diff = target_capacity - self.capacity();
                 self.capacity.fetch_add(diff, Ordering::Relaxed);
                 self.push_semaphore.add_permits(diff);
             }
             std::cmp::Ordering::Less => {
-                for _ in self.capacity()..new_max_size {
-                    let permit = self.push_semaphore.acquire().await.unwrap();
+                // Shrinking the queue is a bit more involved
+                // as there are two cases that need to be covered.
+                for _ in target_capacity..self.capacity() {
+                    tokio::select! {
+                        biased;
+                        // If there are push permits available consume
+                        // them first making sure no new items are pushed
+                        // to the queue.
+                        push_permit = self.push_semaphore.acquire() => {
+                            push_permit.unwrap().forget();
+                        }
+                        // If the queue contains more elements than the
+                        // target capacity those need to be removed from
+                        // the queue.
+                        // Important: Call `self.queue.pop` and not
+                        // `self.pop` as the former would add permits to
+                        // the `push_semaphore` which we don't want to
+                        // happen since the queue is being shrinked.
+                        _ = self.queue.pop() => {}
+                    };
                     self.capacity.fetch_sub(1, Ordering::Relaxed);
-                    permit.forget();
-                    self.queue.pop().await;
                 }
             }
             _ => {}

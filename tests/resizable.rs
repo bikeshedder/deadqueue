@@ -53,4 +53,25 @@ mod tests {
         let queue: Queue<NoDebug> = Queue::new(1);
         format!("{:?}", queue);
     }
+
+    #[tokio::test]
+    async fn test_resize_enlarge() {
+        let queue: Queue<usize> = Queue::new(0);
+        queue.resize(1).await;
+        assert_eq!(queue.capacity(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_resize_shrink() {
+        let queue: Queue<usize> = Queue::new(2);
+        queue.try_push(0).unwrap();
+        queue.resize(1).await;
+        assert_eq!(queue.capacity(), 1);
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue.try_push(42), Err(42));
+        queue.resize(0).await;
+        assert_eq!(queue.capacity(), 0);
+        assert_eq!(queue.len(), 0);
+        assert_eq!(queue.try_push(42), Err(42));
+    }
 }
