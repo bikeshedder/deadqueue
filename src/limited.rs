@@ -87,17 +87,21 @@ impl<T> Queue<T> {
             Err(_) => Err(item),
         }
     }
-    /// Get capacity of the queue
+    /// Get capacity of the queue (maximum number of items queue can store)
     pub fn capacity(&self) -> usize {
         self.queue.capacity()
     }
-    /// Get current length of queue
+    /// Get current length of queue (number of items currently stored)
     pub fn len(&self) -> usize {
         self.queue.len()
     }
     /// Returns `true` if the queue is empty.
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
+    }
+    /// Returns `true` if the queue is full.
+    pub fn is_full(&self) -> bool {
+        self.queue.is_full()
     }
     /// The number of available items in the queue. If there are no
     /// items in the queue this number can become negative and stores the
