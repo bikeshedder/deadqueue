@@ -55,7 +55,7 @@ impl<T> Queue<T> {
         self.semaphore.add_permits(1);
         self.available.add();
     }
-    /// Get current length of queue
+    /// Get current length of queue (number of items currently stored).
     pub fn len(&self) -> usize {
         self.queue.len()
     }

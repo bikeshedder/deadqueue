@@ -69,11 +69,11 @@ impl<T> Queue<T> {
             Err(_) => Err(item),
         }
     }
-    /// Get capacity of the queue
+    /// Get capacity of the queue (maximum number of items queue can store).
     pub fn capacity(&self) -> usize {
         self.capacity.load(Ordering::Relaxed)
     }
-    /// Get current length of queue
+    /// Get current length of queue (number of items currently stored).
     pub fn len(&self) -> usize {
         self.queue.len()
     }
