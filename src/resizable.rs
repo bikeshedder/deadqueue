@@ -81,6 +81,14 @@ impl<T> Queue<T> {
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
     }
+    /// Returns `true` if the queue is full.
+    /// **Note:** this can give an incorrect result if a simultaneous push/pop
+    /// and resize ocurr while this function is executing. try_push() is the
+    /// reccomended and safer mechanism in most circumstances. This method
+    /// is provided as a convenience API.
+    pub fn is_full(&self) -> bool {
+        self.len() >= self.capacity()
+    }
     /// The number of available items in the queue. If there are no
     /// items in the queue this number can become negative and stores the
     /// number of futures waiting for an item.

@@ -74,4 +74,19 @@ mod tests {
         assert_eq!(queue.len(), 0);
         assert_eq!(queue.try_push(42), Err(42));
     }
+
+    #[tokio::test]
+    async fn test_is_full_basic() {
+        let queue: Queue<usize> = Queue::new(2);
+        assert!(!queue.is_full(), "Should be empty at construction");
+        queue.push(1).await;
+        assert!(
+            !queue.is_full(),
+            "Should not be full a one less than capacity"
+        );
+        queue.push(2).await;
+        assert!(queue.is_full(), "Should now be full");
+        let _ = queue.pop().await;
+        assert!(!queue.is_full(), "Should no longer be full after pop");
+    }
 }
