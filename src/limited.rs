@@ -7,6 +7,7 @@ use crossbeam_queue::ArrayQueue;
 use tokio::sync::Semaphore;
 
 use crate::atomic::Available;
+use crate::Notifier;
 
 /// Queue that is limited in size and does not support resizing.
 ///
@@ -21,6 +22,8 @@ pub struct Queue<T> {
     push_semaphore: Semaphore,
     pop_semaphore: Semaphore,
     available: Available,
+    notify_full: Notifier,
+    notify_empty: Notifier,
 }
 
 impl<T> Debug for Queue<T> {
@@ -42,6 +45,8 @@ impl<T> Queue<T> {
             push_semaphore: Semaphore::new(max_size),
             pop_semaphore: Semaphore::new(0),
             available: Available::new(0),
+            notify_full: crate::new_notifier(),
+            notify_empty: crate::new_notifier(),
         }
     }
     /// Get an item from the queue. If the queue is currently empty
@@ -53,6 +58,7 @@ impl<T> Queue<T> {
         txn.commit();
         permit.forget();
         self.push_semaphore.add_permits(1);
+        self.notify_if_empty();
         item
     }
     /// Try to get an item from the queue. If the queue is currently
@@ -64,6 +70,7 @@ impl<T> Queue<T> {
         txn.commit();
         permit.forget();
         self.push_semaphore.add_permits(1);
+        self.notify_if_empty();
         item
     }
     /// Push an item into the queue
@@ -73,6 +80,7 @@ impl<T> Queue<T> {
         self.queue.push(item).ok().unwrap();
         permit.forget();
         self.pop_semaphore.add_permits(1);
+        self.notify_if_full();
     }
     /// Try to push an item into the queue. If the queue is full
     /// the item is returned as `Err<T>`.
@@ -82,6 +90,7 @@ impl<T> Queue<T> {
                 self.queue.push(item).ok().unwrap();
                 permit.forget();
                 self.pop_semaphore.add_permits(1);
+                self.notify_if_full();
                 Ok(())
             }
             Err(_) => Err(item),
@@ -109,15 +118,31 @@ impl<T> Queue<T> {
     pub fn available(&self) -> isize {
         self.available.get()
     }
+    /// Check if the queue is full and notify any waiters
+    fn notify_if_full(&self) {
+        if self.push_semaphore.available_permits() == 0 {
+            self.notify_full.send_replace(());
+        }
+    }
     /// Await until the queue is full.
-    pub async fn full(&self) {
-        let capacity = self.capacity().try_into().unwrap();
-        let _ = self.pop_semaphore.acquire_many(capacity).await.unwrap();
+    pub async fn wait_full(&self) {
+        if self.len() == self.capacity() {
+            return;
+        }
+        self.notify_full.subscribe().changed().await.unwrap();
+    }
+    /// Check if the queue is empty and notify any waiters
+    fn notify_if_empty(&self) {
+        if self.pop_semaphore.available_permits() == 0 {
+            self.notify_empty.send_replace(());
+        }
     }
     /// Await until the queue is empty.
-    pub async fn empty(&self) {
-        let capacity = self.capacity().try_into().unwrap();
-        let _ = self.push_semaphore.acquire_many(capacity).await.unwrap();
+    pub async fn wait_empty(&self) {
+        if self.is_empty() {
+            return;
+        }
+        self.notify_empty.subscribe().changed().await.unwrap();
     }
 }
 
@@ -139,6 +164,8 @@ where
             push_semaphore: Semaphore::new(0),
             pop_semaphore: Semaphore::new(size),
             available: Available::new(size.try_into().unwrap()),
+            notify_full: crate::new_notifier(),
+            notify_empty: crate::new_notifier(),
         }
     }
 }

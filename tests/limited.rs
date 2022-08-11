@@ -51,7 +51,7 @@ mod tests {
         let future = tokio::spawn(async move {
             future_barrier.wait().await;
             assert_ne!(future_queue.capacity(), future_queue.len());
-            future_queue.full().await;
+            future_queue.wait_full().await;
         });
         barrier.wait().await;
         for i in 0..100 {
@@ -73,10 +73,54 @@ mod tests {
         let future = tokio::spawn(async move {
             future_barrier.wait().await;
             assert!(!future_queue.is_empty());
-            future_queue.empty().await;
+            future_queue.wait_empty().await;
         });
         barrier.wait().await;
         for _ in 0..100 {
+            queue.pop().await;
+        }
+        future.await.unwrap();
+        assert_eq!(queue.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_full_deadlock() {
+        let queue: Arc<Queue<()>> = Arc::new(Queue::new(2));
+        let barrier = Arc::new(tokio::sync::Barrier::new(2));
+        let future_queue = queue.clone();
+        let future_barrier = barrier.clone();
+        let future = tokio::spawn(async move {
+            future_barrier.wait().await;
+            assert_ne!(future_queue.capacity(), future_queue.len());
+            future_queue.wait_full().await;
+        });
+        barrier.wait().await;
+        queue.push(()).await;
+        queue.pop().await;
+        for _ in 0..2 {
+            queue.push(()).await;
+        }
+        future.await.unwrap();
+        assert_eq!(queue.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_empty_deadlock() {
+        let queue: Arc<Queue<()>> = Arc::new(Queue::new(3));
+        for _ in 0..2 {
+            queue.push(()).await;
+        }
+        let barrier = Arc::new(tokio::sync::Barrier::new(2));
+        let future_queue = queue.clone();
+        let future_barrier = barrier.clone();
+        let future = tokio::spawn(async move {
+            future_barrier.wait().await;
+            assert!(!future_queue.is_empty());
+            future_queue.wait_empty().await;
+        });
+        barrier.wait().await;
+        queue.push(()).await;
+        for _ in 0..3 {
             queue.pop().await;
         }
         future.await.unwrap();
