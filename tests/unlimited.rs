@@ -62,13 +62,36 @@ mod tests {
         let future = tokio::spawn(async move {
             future_barrier.wait().await;
             assert!(!future_queue.is_empty());
-            future_queue.empty().await;
+            future_queue.wait_empty().await;
         });
         // Slightly delay the pop operations
         // to ensure that the spawned task has
         // time to start
         barrier.wait().await;
         for _ in 0..100 {
+            queue.pop().await;
+        }
+        future.await.unwrap();
+        assert_eq!(queue.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_empty_deadlock() {
+        let queue: Arc<Queue<()>> = Arc::new(Queue::new());
+        for _ in 0..2 {
+            queue.push(());
+        }
+        let barrier = Arc::new(tokio::sync::Barrier::new(2));
+        let future_queue = queue.clone();
+        let future_barrier = barrier.clone();
+        let future = tokio::spawn(async move {
+            future_barrier.wait().await;
+            assert!(!future_queue.is_empty());
+            future_queue.wait_empty().await;
+        });
+        barrier.wait().await;
+        queue.push(());
+        for _ in 0..3 {
             queue.pop().await;
         }
         future.await.unwrap();

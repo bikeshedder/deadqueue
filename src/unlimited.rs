@@ -5,11 +5,10 @@ use std::fmt::Debug;
 use std::iter::FromIterator;
 
 use crossbeam_queue::SegQueue;
-use tokio::sync::{Semaphore, watch};
+use tokio::sync::Semaphore;
 
 use crate::atomic::Available;
-
-type EmptyNotifier = watch::Sender<()>;
+use crate::Notifier;
 
 /// Queue that is unlimited in size.
 ///
@@ -22,20 +21,13 @@ pub struct Queue<T> {
     queue: SegQueue<T>,
     semaphore: Semaphore,
     available: Available,
-    notify_empty: EmptyNotifier,
+    notify_empty: Notifier,
 }
 
 impl<T> Queue<T> {
     /// Create new empty queue
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Notify any callers awaiting empty()
-    fn notify_if_empty(&self) {
-        if self.is_empty() {
-            self.notify_empty.send_replace(());
-        }
     }
 
     /// Get an item from the queue. If the queue is currently empty
@@ -82,8 +74,14 @@ impl<T> Queue<T> {
     pub fn available(&self) -> isize {
         self.available.get()
     }
+    /// Notify any callers awaiting empty()
+    fn notify_if_empty(&self) {
+        if self.is_empty() {
+            self.notify_empty.send_replace(());
+        }
+    }
     /// Await until the queue is empty
-    pub async fn empty(&self) {
+    pub async fn wait_empty(&self) {
         if self.is_empty() {
             return;
         }
@@ -104,12 +102,11 @@ impl<T> Debug for Queue<T> {
 
 impl<T> Default for Queue<T> {
     fn default() -> Self {
-        let (sender, _) = watch::channel(());
         Self {
             queue: SegQueue::new(),
             semaphore: Semaphore::new(0),
             available: Available::new(0),
-            notify_empty: sender,
+            notify_empty: crate::new_notifier(),
         }
     }
 }

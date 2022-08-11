@@ -99,6 +99,8 @@
 //! at your option.
 #![warn(missing_docs)]
 
+use tokio::sync::watch;
+
 mod atomic;
 
 #[cfg(feature = "unlimited")]
@@ -109,3 +111,12 @@ pub mod resizable;
 
 #[cfg(feature = "limited")]
 pub mod limited;
+
+/// Private type alias for notify_full and notify_empty
+type Notifier = watch::Sender<()>;
+
+/// Initialize the notify_full sender
+fn new_notifier() -> Notifier {
+    let (sender, _) = watch::channel(());
+    sender
+}
