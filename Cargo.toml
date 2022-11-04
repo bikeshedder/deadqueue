@@ -13,7 +13,7 @@ edition = "2018"
 all-features = true
 
 [dependencies]
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "macros"] }
 crossbeam-queue = "0.3"
 
 [dev-dependencies]
