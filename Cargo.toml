@@ -1,6 +1,6 @@
 [package]
 name = "deadqueue"
-version = "0.2.3"
+version = "0.2.4"
 authors = ["Michael P. Jung <michael.jung@terreon.de>"]
 description = "Dead simple async queue"
 keywords = ["async", "queue"]
@@ -13,7 +13,7 @@ edition = "2018"
 all-features = true
 
 [dependencies]
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "macros"] }
 crossbeam-queue = "0.3"
 
 [dev-dependencies]
