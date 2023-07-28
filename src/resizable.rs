@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tokio::sync::{Mutex, Semaphore};
 
+use crate::atomic::Available;
 use crate::unlimited::Queue as UnlimitedQueue;
 use crate::Notifier;
 
@@ -23,9 +24,10 @@ pub struct Queue<T> {
     queue: UnlimitedQueue<T>,
     capacity: AtomicUsize,
     push_semaphore: Semaphore,
+    available: Available,
     resize_mutex: Mutex<()>,
-    notify_full: Notifier,
-    notify_empty: Notifier,
+    notifier_full: Notifier,
+    notifier_empty: Notifier,
 }
 
 impl<T> Queue<T> {
@@ -35,44 +37,59 @@ impl<T> Queue<T> {
             queue: UnlimitedQueue::new(),
             capacity: AtomicUsize::new(max_size),
             push_semaphore: Semaphore::new(max_size),
+            available: Available::new(0),
             resize_mutex: Mutex::default(),
-            notify_full: crate::new_notifier(),
-            notify_empty: crate::new_notifier(),
+            notifier_full: crate::new_notifier(),
+            notifier_empty: crate::new_notifier(),
         }
     }
     /// Get an item from the queue. If the queue is currently empty
     /// this method blocks until an item is available.
     pub async fn pop(&self) -> T {
+        let (txn, previous) = self.available.sub();
         let item = self.queue.pop().await;
+        txn.commit();
+        if previous <= 1 {
+            self.notify_empty();
+        }
         self.push_semaphore.add_permits(1);
-        self.notify_if_empty();
         item
     }
     /// Try to get an item from the queue. If the queue is currently
     /// empty return None instead.
     pub fn try_pop(&self) -> Option<T> {
+        let (txn, previous) = self.available.sub();
         let item = self.queue.try_pop();
         if item.is_some() {
+            txn.commit();
+            if previous <= 1 {
+                self.notify_empty();
+            }
             self.push_semaphore.add_permits(1);
         }
-        self.notify_if_empty();
         item
     }
     /// Push an item into the queue
     pub async fn push(&self, item: T) {
         let permit = self.push_semaphore.acquire().await.unwrap();
+        let previous = self.available.add();
         self.queue.push(item);
+        if previous + 1 >= self.capacity().try_into().unwrap() {
+            self.notify_full();
+        }
         permit.forget();
-        self.notify_if_full();
     }
     /// Try to push an item to the queue. If the queue is currently
     /// full return the object as `Err<T>`.
     pub fn try_push(&self, item: T) -> Result<(), T> {
         match self.push_semaphore.try_acquire() {
             Ok(permit) => {
+                let previous = self.available.add();
                 self.queue.push(item);
+                if previous + 1 >= self.capacity().try_into().unwrap() {
+                    self.notify_full();
+                }
                 permit.forget();
-                self.notify_if_full();
                 Ok(())
             }
             Err(_) => Err(item),
@@ -105,30 +122,26 @@ impl<T> Queue<T> {
         self.queue.available()
     }
     /// Check if the queue is full and notify any waiters
-    fn notify_if_full(&self) {
-        if self.push_semaphore.available_permits() == 0 {
-            self.notify_full.send_replace(());
-        }
+    fn notify_full(&self) {
+        self.notifier_full.send_replace(());
     }
     /// Await until the queue is full.
     pub async fn wait_full(&self) {
         if self.len() == self.capacity() {
             return;
         }
-        self.notify_full.subscribe().changed().await.unwrap();
+        self.notifier_full.subscribe().changed().await.unwrap();
     }
     /// Check if the queue is empty and notify any waiters
-    fn notify_if_empty(&self) {
-        if self.push_semaphore.available_permits() == self.capacity() {
-            self.notify_empty.send_replace(());
-        }
+    fn notify_empty(&self) {
+        self.notifier_empty.send_replace(());
     }
     /// Await until the queue is empty.
     pub async fn wait_empty(&self) {
         if self.is_empty() {
             return;
         }
-        self.notify_empty.subscribe().changed().await.unwrap();
+        self.notifier_empty.subscribe().changed().await.unwrap();
     }
     /// Resize queue. This increases or decreases the queue
     /// capacity accordingly.
@@ -176,7 +189,7 @@ impl<T> Queue<T> {
                 // If the API changes in a future version, this call should remain
                 // here so any callers awaiting `self.full()` will be notified
                 // if the queue is resized smaller such that it becomes full.
-                self.notify_if_full();
+                self.notify_full();
             }
             _ => {}
         }
@@ -202,9 +215,10 @@ impl<T> FromIterator<T> for Queue<T> {
             queue,
             capacity: len.try_into().unwrap(),
             push_semaphore: Semaphore::new(0),
+            available: Available::new(0),
             resize_mutex: Mutex::default(),
-            notify_full: crate::new_notifier(),
-            notify_empty: crate::new_notifier(),
+            notifier_full: crate::new_notifier(),
+            notifier_empty: crate::new_notifier(),
         }
     }
 }
