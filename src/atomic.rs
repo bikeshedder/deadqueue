@@ -7,12 +7,12 @@ impl Available {
     pub fn new(value: isize) -> Self {
         Self(AtomicIsize::new(value))
     }
-    pub fn sub(&self) -> TransactionSub {
-        self.0.fetch_sub(1, Ordering::Relaxed);
-        TransactionSub(&self.0)
+    pub fn sub(&self) -> (TransactionSub, isize) {
+        let previous = self.0.fetch_sub(1, Ordering::Relaxed);
+        (TransactionSub(&self.0), previous)
     }
-    pub fn add(&self) {
-        self.0.fetch_add(1, Ordering::Relaxed);
+    pub fn add(&self) -> isize {
+        self.0.fetch_add(1, Ordering::Relaxed)
     }
     pub fn get(&self) -> isize {
         self.0.load(Ordering::Relaxed)

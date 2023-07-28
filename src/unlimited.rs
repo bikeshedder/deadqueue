@@ -21,7 +21,7 @@ pub struct Queue<T> {
     queue: SegQueue<T>,
     semaphore: Semaphore,
     available: Available,
-    notify_empty: Notifier,
+    notifier_empty: Notifier,
 }
 
 impl<T> Queue<T> {
@@ -33,23 +33,27 @@ impl<T> Queue<T> {
     /// Get an item from the queue. If the queue is currently empty
     /// this method blocks until an item is available.
     pub async fn pop(&self) -> T {
-        let txn = self.available.sub();
+        let (txn, previous) = self.available.sub();
         let permit = self.semaphore.acquire().await.unwrap();
         let item = self.queue.pop().unwrap();
         txn.commit();
+        if previous <= 1 {
+            self.notify_empty();
+        }
         permit.forget();
-        self.notify_if_empty();
         item
     }
     /// Try to get an item from the queue. If the queue is currently
     /// empty return None instead.
     pub fn try_pop(&self) -> Option<T> {
-        let txn = self.available.sub();
+        let (txn, previous) = self.available.sub();
         let permit = self.semaphore.try_acquire().ok()?;
         let item = self.queue.pop().unwrap();
         txn.commit();
+        if previous <= 1 {
+            self.notify_empty();
+        }
         permit.forget();
-        self.notify_if_empty();
         Some(item)
     }
     /// Push an item into the queue
@@ -73,17 +77,15 @@ impl<T> Queue<T> {
         self.available.get()
     }
     /// Notify any callers awaiting empty()
-    fn notify_if_empty(&self) {
-        if self.is_empty() {
-            self.notify_empty.send_replace(());
-        }
+    fn notify_empty(&self) {
+        self.notifier_empty.send_replace(());
     }
     /// Await until the queue is empty
     pub async fn wait_empty(&self) {
         if self.is_empty() {
             return;
         }
-        self.notify_empty.subscribe().changed().await.unwrap()
+        self.notifier_empty.subscribe().changed().await.unwrap()
     }
 }
 
@@ -93,7 +95,7 @@ impl<T> Debug for Queue<T> {
             .field("queue", &self.queue)
             .field("semaphore", &self.semaphore)
             .field("available", &self.available)
-            .field("empty", &self.notify_empty)
+            .field("empty", &self.notifier_empty)
             .finish()
     }
 }
@@ -104,7 +106,7 @@ impl<T> Default for Queue<T> {
             queue: SegQueue::new(),
             semaphore: Semaphore::new(0),
             available: Available::new(0),
-            notify_empty: crate::new_notifier(),
+            notifier_empty: crate::new_notifier(),
         }
     }
 }

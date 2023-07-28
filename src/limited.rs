@@ -22,8 +22,8 @@ pub struct Queue<T> {
     push_semaphore: Semaphore,
     pop_semaphore: Semaphore,
     available: Available,
-    notify_full: Notifier,
-    notify_empty: Notifier,
+    notifier_full: Notifier,
+    notifier_empty: Notifier,
 }
 
 impl<T> Debug for Queue<T> {
@@ -45,53 +45,61 @@ impl<T> Queue<T> {
             push_semaphore: Semaphore::new(max_size),
             pop_semaphore: Semaphore::new(0),
             available: Available::new(0),
-            notify_full: crate::new_notifier(),
-            notify_empty: crate::new_notifier(),
+            notifier_full: crate::new_notifier(),
+            notifier_empty: crate::new_notifier(),
         }
     }
     /// Get an item from the queue. If the queue is currently empty
     /// this method blocks until an item is available.
     pub async fn pop(&self) -> T {
-        let txn = self.available.sub();
+        let (txn, previous) = self.available.sub();
         let permit = self.pop_semaphore.acquire().await.unwrap();
         let item = self.queue.pop().unwrap();
         txn.commit();
+        if previous <= 1 {
+            self.notify_empty();
+        }
         permit.forget();
         self.push_semaphore.add_permits(1);
-        self.notify_if_empty();
         item
     }
     /// Try to get an item from the queue. If the queue is currently
     /// empty return None instead.
     pub fn try_pop(&self) -> Option<T> {
-        let txn = self.available.sub();
+        let (txn, previous) = self.available.sub();
         let permit = self.pop_semaphore.try_acquire().ok()?;
         let item = Some(self.queue.pop().unwrap());
         txn.commit();
+        if previous <= 1 {
+            self.notify_empty();
+        }
         permit.forget();
         self.push_semaphore.add_permits(1);
-        self.notify_if_empty();
         item
     }
     /// Push an item into the queue
     pub async fn push(&self, item: T) {
         let permit = self.push_semaphore.acquire().await.unwrap();
-        self.available.add();
+        let previous = self.available.add();
         self.queue.push(item).ok().unwrap();
+        if previous + 1 >= self.queue.capacity().try_into().unwrap() {
+            self.notify_full();
+        }
         permit.forget();
         self.pop_semaphore.add_permits(1);
-        self.notify_if_full();
     }
     /// Try to push an item into the queue. If the queue is full
     /// the item is returned as `Err<T>`.
     pub fn try_push(&self, item: T) -> Result<(), T> {
         match self.push_semaphore.try_acquire() {
             Ok(permit) => {
-                self.available.add();
+                let previous = self.available.add();
                 self.queue.push(item).ok().unwrap();
+                if previous + 1 >= self.queue.capacity().try_into().unwrap() {
+                    self.notify_full();
+                }
                 permit.forget();
                 self.pop_semaphore.add_permits(1);
-                self.notify_if_full();
                 Ok(())
             }
             Err(_) => Err(item),
@@ -120,30 +128,26 @@ impl<T> Queue<T> {
         self.available.get()
     }
     /// Check if the queue is full and notify any waiters
-    fn notify_if_full(&self) {
-        if self.push_semaphore.available_permits() == 0 {
-            self.notify_full.send_replace(());
-        }
+    fn notify_full(&self) {
+        self.notifier_full.send_replace(());
     }
     /// Await until the queue is full.
     pub async fn wait_full(&self) {
         if self.len() == self.capacity() {
             return;
         }
-        self.notify_full.subscribe().changed().await.unwrap();
+        self.notifier_full.subscribe().changed().await.unwrap();
     }
     /// Check if the queue is empty and notify any waiters
-    fn notify_if_empty(&self) {
-        if self.pop_semaphore.available_permits() == 0 {
-            self.notify_empty.send_replace(());
-        }
+    fn notify_empty(&self) {
+        self.notifier_empty.send_replace(());
     }
     /// Await until the queue is empty.
     pub async fn wait_empty(&self) {
         if self.is_empty() {
             return;
         }
-        self.notify_empty.subscribe().changed().await.unwrap();
+        self.notifier_empty.subscribe().changed().await.unwrap();
     }
 }
 
@@ -165,8 +169,8 @@ where
             push_semaphore: Semaphore::new(0),
             pop_semaphore: Semaphore::new(size),
             available: Available::new(size.try_into().unwrap()),
-            notify_full: crate::new_notifier(),
-            notify_empty: crate::new_notifier(),
+            notifier_full: crate::new_notifier(),
+            notifier_empty: crate::new_notifier(),
         }
     }
 }
