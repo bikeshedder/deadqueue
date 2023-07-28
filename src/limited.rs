@@ -87,6 +87,7 @@ impl<T> Queue<T> {
     pub fn try_push(&self, item: T) -> Result<(), T> {
         match self.push_semaphore.try_acquire() {
             Ok(permit) => {
+                self.available.add();
                 self.queue.push(item).ok().unwrap();
                 permit.forget();
                 self.pop_semaphore.add_permits(1);

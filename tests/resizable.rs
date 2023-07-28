@@ -22,6 +22,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_available() {
+        let queue: Queue<usize> = Queue::new(2);
+        assert_eq!(queue.len(), 0);
+        assert!(queue.try_push(1).is_ok());
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue.available(), 1);
+        assert!(queue.try_pop().is_some());
+        assert_eq!(queue.len(), 0);
+        assert_eq!(queue.available(), 0);
+    }
+
+    #[tokio::test]
     async fn test_parallel() {
         let queue: Arc<Queue<usize>> = Arc::new(Queue::new(10));
         let mut futures = Vec::new();
@@ -45,6 +57,33 @@ mod tests {
             future.await.unwrap();
         }
         assert_eq!(queue.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_parallel_available() {
+        const N: usize = 2;
+        let queue: Arc<Queue<usize>> = Arc::new(Queue::new(N));
+        let barrier = Arc::new(tokio::sync::Barrier::new(N + 1));
+        let mut futures = Vec::new();
+        for _ in 0..N {
+            let queue = queue.clone();
+            let barrier = barrier.clone();
+            futures.push(tokio::spawn(async move {
+                barrier.wait().await;
+                queue.pop().await;
+            }));
+        }
+        barrier.wait().await;
+        assert_eq!(queue.len(), 0);
+        assert_eq!(queue.available(), -(N as isize));
+        for i in 0..N {
+            queue.push(i).await;
+        }
+        for future in futures {
+            future.await.unwrap();
+        }
+        assert_eq!(queue.len(), 0);
+        assert_eq!(queue.available(), 0);
     }
 
     #[tokio::test]

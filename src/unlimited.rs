@@ -35,10 +35,8 @@ impl<T> Queue<T> {
     pub async fn pop(&self) -> T {
         let txn = self.available.sub();
         let permit = self.semaphore.acquire().await.unwrap();
-        txn.commit();
-        //txn.commit();
-        // FIXME must be used
         let item = self.queue.pop().unwrap();
+        txn.commit();
         permit.forget();
         self.notify_if_empty();
         item
