@@ -33,11 +33,11 @@ impl<T> Queue<T> {
     /// Get an item from the queue. If the queue is currently empty
     /// this method blocks until an item is available.
     pub async fn pop(&self) -> T {
-        let (txn, previous) = self.available.sub();
+        let (txn, new_len) = self.available.sub();
         let permit = self.semaphore.acquire().await.unwrap();
         let item = self.queue.pop().unwrap();
         txn.commit();
-        if previous <= 1 {
+        if new_len <= 0 {
             self.notify_empty();
         }
         permit.forget();
@@ -46,11 +46,11 @@ impl<T> Queue<T> {
     /// Try to get an item from the queue. If the queue is currently
     /// empty return None instead.
     pub fn try_pop(&self) -> Option<T> {
-        let (txn, previous) = self.available.sub();
+        let (txn, new_len) = self.available.sub();
         let permit = self.semaphore.try_acquire().ok()?;
         let item = self.queue.pop().unwrap();
         txn.commit();
-        if previous <= 1 {
+        if new_len <= 0 {
             self.notify_empty();
         }
         permit.forget();

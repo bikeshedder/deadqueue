@@ -8,11 +8,11 @@ impl Available {
         Self(AtomicIsize::new(value))
     }
     pub fn sub(&self) -> (TransactionSub, isize) {
-        let previous = self.0.fetch_sub(1, Ordering::Relaxed);
-        (TransactionSub(&self.0), previous)
+        let new_len = self.0.fetch_sub(1, Ordering::Relaxed) - 1;
+        (TransactionSub(&self.0), new_len)
     }
     pub fn add(&self) -> isize {
-        self.0.fetch_add(1, Ordering::Relaxed)
+        self.0.fetch_add(1, Ordering::Relaxed) + 1
     }
     pub fn get(&self) -> isize {
         self.0.load(Ordering::Relaxed)
