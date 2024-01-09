@@ -7,7 +7,7 @@ use crossbeam_queue::ArrayQueue;
 use tokio::sync::Semaphore;
 
 use crate::atomic::Available;
-use crate::Notifier;
+use crate::{Notifier, Receiver};
 
 /// Queue that is limited in size and does not support resizing.
 ///
@@ -136,7 +136,12 @@ impl<T> Queue<T> {
         if self.len() == self.capacity() {
             return;
         }
-        self.notifier_full.subscribe().changed().await.unwrap();
+        self.subscribe_full().changed().await.unwrap();
+    }
+    /// Get a `Receiver` object that can repeatedly be awaited for
+    /// queue-full notifications.
+    pub fn subscribe_full(&self) -> Receiver {
+        self.notifier_full.subscribe()
     }
     /// Check if the queue is empty and notify any waiters
     fn notify_empty(&self) {
@@ -147,7 +152,12 @@ impl<T> Queue<T> {
         if self.is_empty() {
             return;
         }
-        self.notifier_empty.subscribe().changed().await.unwrap();
+        self.subscribe_empty().changed().await.unwrap();
+    }
+    /// Get a `Receiver` object that can repeatedly be awaited for
+    /// queue-empty notifications.
+    pub fn subscribe_empty(&self) -> Receiver {
+        self.notifier_empty.subscribe()
     }
 }
 
