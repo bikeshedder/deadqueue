@@ -46,10 +46,10 @@ impl<T> Queue<T> {
     /// Get an item from the queue. If the queue is currently empty
     /// this method blocks until an item is available.
     pub async fn pop(&self) -> T {
-        let (txn, previous) = self.available.sub();
+        let (txn, new_len) = self.available.sub();
         let item = self.queue.pop().await;
         txn.commit();
-        if previous <= 1 {
+        if new_len <= 0 {
             self.notify_empty();
         }
         self.push_semaphore.add_permits(1);
@@ -58,11 +58,11 @@ impl<T> Queue<T> {
     /// Try to get an item from the queue. If the queue is currently
     /// empty return None instead.
     pub fn try_pop(&self) -> Option<T> {
-        let (txn, previous) = self.available.sub();
+        let (txn, new_len) = self.available.sub();
         let item = self.queue.try_pop();
         if item.is_some() {
             txn.commit();
-            if previous <= 1 {
+            if new_len <= 0 {
                 self.notify_empty();
             }
             self.push_semaphore.add_permits(1);
@@ -72,9 +72,9 @@ impl<T> Queue<T> {
     /// Push an item into the queue
     pub async fn push(&self, item: T) {
         let permit = self.push_semaphore.acquire().await.unwrap();
-        let previous = self.available.add();
+        let new_len = self.available.add();
         self.queue.push(item);
-        if previous + 1 >= self.capacity().try_into().unwrap() {
+        if new_len >= self.capacity().try_into().unwrap() {
             self.notify_full();
         }
         permit.forget();
@@ -84,9 +84,9 @@ impl<T> Queue<T> {
     pub fn try_push(&self, item: T) -> Result<(), T> {
         match self.push_semaphore.try_acquire() {
             Ok(permit) => {
-                let previous = self.available.add();
+                let new_len = self.available.add();
                 self.queue.push(item);
-                if previous + 1 >= self.capacity().try_into().unwrap() {
+                if new_len >= self.capacity().try_into().unwrap() {
                     self.notify_full();
                 }
                 permit.forget();
