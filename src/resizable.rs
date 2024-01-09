@@ -186,20 +186,15 @@ impl<T> Queue<T> {
                         // Important: Call `self.queue.pop` and not
                         // `self.pop` as the former would add permits to
                         // the `push_semaphore` which we don't want to
-                        // happen since the queue is being shrinked.
+                        // happen since the queue is being shrunk.
                         _ = self.queue.pop() => {}
                     };
                     self.capacity.fetch_sub(1, Ordering::Relaxed);
                 }
-                // Currently this is a no-op because this resize() function
-                // borrows mutably, so there can be no callers awaiting
-                // `self.full()`, because they would hold an immutable reference.
-                //
-                // The code in self.resize() doesn't require mutability, though.
-                // If the API changes in a future version, this call should remain
-                // here so any callers awaiting `self.full()` will be notified
-                // if the queue is resized smaller such that it becomes full.
-                self.notify_full();
+
+                if self.is_full() {
+                    self.notify_full();
+                }
             }
             _ => {}
         }
