@@ -117,6 +117,9 @@ pub mod limited;
 /// Private type alias for notify_full and notify_empty
 type Notifier = watch::Sender<()>;
 
+/// Public type alias for subscribe_full and subscribe_empty
+pub type Receiver = watch::Receiver<()>;
+
 /// Initialize the notify_full sender
 fn new_notifier() -> Notifier {
     let (sender, _) = watch::channel(());

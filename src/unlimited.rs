@@ -8,7 +8,7 @@ use crossbeam_queue::SegQueue;
 use tokio::sync::Semaphore;
 
 use crate::atomic::Available;
-use crate::Notifier;
+use crate::{Notifier, Receiver};
 
 /// Queue that is unlimited in size.
 ///
@@ -80,12 +80,17 @@ impl<T> Queue<T> {
     fn notify_empty(&self) {
         self.notifier_empty.send_replace(());
     }
-    /// Await until the queue is empty
+    /// Await until the queue is empty.
     pub async fn wait_empty(&self) {
         if self.is_empty() {
             return;
         }
-        self.notifier_empty.subscribe().changed().await.unwrap()
+        self.subscribe_empty().changed().await.unwrap();
+    }
+    /// Get a `Receiver` object that can repeatedly be awaited for
+    /// queue-empty notifications.
+    pub fn subscribe_empty(&self) -> Receiver {
+        self.notifier_empty.subscribe()
     }
 }
 
